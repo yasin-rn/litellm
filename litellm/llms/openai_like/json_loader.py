@@ -15,6 +15,10 @@ from litellm.types.utils import ProviderSpecificModelInfo
 _PROVIDER_INFO_ADAPTER: Final = TypeAdapter(ProviderSpecificModelInfo)
 _SPECIAL_HANDLING_ADAPTER: Final = TypeAdapter(Mapping[str, bool])
 _MODEL_ENDPOINTS_ADAPTER: Final = TypeAdapter(Mapping[str, tuple[str, ...]])
+_HEADERS_ADAPTER: Final = TypeAdapter(Mapping[str, str])
+_API_KEY_PLACEHOLDER: Final = "{api_key}"
+# Set from the resolved API key by the request path; an entry can never replace it
+_RESERVED_HEADERS: Final = frozenset({"authorization"})
 
 
 class SimpleProviderConfig:
@@ -38,6 +42,26 @@ class SimpleProviderConfig:
         self.provider_info: ProviderSpecificModelInfo = (
             _PROVIDER_INFO_ADAPTER.validate_python(data["provider_info"]) if "provider_info" in data else {}
         )
+        self.headers: Mapping[str, str] = _HEADERS_ADAPTER.validate_python(data.get("headers", {}))
+
+    def request_headers(self, api_key: str | None) -> dict[str, str]:
+        """
+        The entry's static `headers` for one request. `{api_key}` in a value is
+        replaced by the resolved API key; a header that needs the key is left out
+        when there is none, so a placeholder is never sent literally.
+        `Authorization` is never taken from the entry.
+        """
+        resolved: Final[dict[str, str]] = {}
+        for name, value in self.headers.items():
+            if name.lower() in _RESERVED_HEADERS:
+                continue
+            if _API_KEY_PLACEHOLDER in value:
+                if not api_key:
+                    continue
+                resolved[name] = value.replace(_API_KEY_PLACEHOLDER, api_key)
+            else:
+                resolved[name] = value
+        return resolved
 
 
 class JSONProviderRegistry:
@@ -75,6 +99,12 @@ class JSONProviderRegistry:
     def get(cls, slug: str) -> SimpleProviderConfig | None:
         """Get a provider configuration by slug"""
         return cls._providers.get(slug)
+
+    @classmethod
+    def get_request_headers(cls, slug: str | None, api_key: str | None) -> dict[str, str]:
+        """The `headers` of a JSON provider for one request; empty for any other provider"""
+        provider: Final = cls._providers.get(slug) if slug else None
+        return provider.request_headers(api_key) if provider is not None else {}
 
     @classmethod
     def exists(cls, slug: str) -> bool:

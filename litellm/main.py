@@ -2839,10 +2839,14 @@ def _complete_custom_openai(
     )
 
     headers = headers or litellm.headers
-    outbound_headers: Final = (
-        headers
-        if provider_config is None
-        else with_attribution_headers(provider_config.get_attribution_headers(), headers)
+    # JSON providers (providers.json) are often not in LlmProviders, so provider_config is None for
+    # them: their `headers` come from the registry. A caller header with the same name wins.
+    outbound_headers: Final = with_attribution_headers(
+        {
+            **JSONProviderRegistry.get_request_headers(custom_llm_provider, api_key),
+            **(provider_config.get_attribution_headers() if provider_config is not None else {}),
+        },
+        headers,
     )
 
     # Add GitHub Copilot headers (same as /responses endpoint does)

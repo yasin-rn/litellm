@@ -160,13 +160,21 @@ class JSONProviderAnthropicMessagesConfig(OpenAILikeAnthropicMessagesConfig):
         api_key: str | None = None,
         api_base: str | None = None,
     ) -> tuple[dict[str, str], str | None]:
+        resolved_api_key: Final = self._resolve_api_key(api_key)
+        # The entry's `headers`; a header the caller already set (any casing) wins
+        present: Final = {name.lower() for name in headers}
+        entry_headers: Final = {
+            name: value
+            for name, value in self._provider.request_headers(resolved_api_key).items()
+            if name.lower() not in present
+        }
         return super().validate_anthropic_messages_environment(
-            headers=headers,
+            headers={**entry_headers, **headers},
             model=model,
             messages=messages,
             optional_params=optional_params,
             litellm_params=litellm_params,
-            api_key=self._resolve_api_key(api_key),
+            api_key=resolved_api_key,
             api_base=api_base,
         )
 

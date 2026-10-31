@@ -69,6 +69,15 @@ That's it! The provider will be automatically loaded and available.
     // model has no cost map row or its row leaves the field unset
     "provider_info": {
       "supports_function_calling": true
+    },
+
+    // Optional: Static headers sent on chat completions, /v1/responses and /v1/messages
+    // (native or bridged through chat completions); embeddings do not get them.
+    // "{api_key}" in a value is replaced by the resolved API key.
+    // A header the caller passes (extra_headers / headers) with the same name wins;
+    // Authorization is always set from the API key and cannot be overridden here.
+    "headers": {
+      "X-Your-Provider-Client": "litellm"
     }
   }
 }

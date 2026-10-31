@@ -2,7 +2,7 @@
 Dynamic configuration class generator for JSON-based providers.
 """
 
-from collections.abc import Coroutine
+from collections.abc import Coroutine, Mapping
 from typing import TYPE_CHECKING, Final, Literal, overload
 
 from litellm._logging import verbose_logger
@@ -219,6 +219,15 @@ def create_responses_config_class(provider: SimpleProviderConfig) -> "type[OpenA
             api_key: Final = litellm_params.api_key or get_secret_str(provider.api_key_env)
             if api_key:
                 headers["Authorization"] = f"Bearer {api_key}"
+            # The entry's `headers`; a header the caller set (any casing) wins, whether it is
+            # already in `headers` or in the extra_headers the handler adds after this call
+            caller_extra: Final = getattr(litellm_params, "extra_headers", None)
+            present: Final = {
+                name.lower() for name in (*headers, *(caller_extra if isinstance(caller_extra, Mapping) else ()))
+            }
+            for name, value in provider.request_headers(api_key).items():
+                if name.lower() not in present:
+                    headers[name] = value
             return headers
 
         def get_complete_url(
